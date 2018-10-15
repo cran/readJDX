@@ -21,37 +21,65 @@ required checks.  It may also be useful for troubleshooting.
 The default is \code{TRUE} i.e. stop when something is not right.
 This ensures that correct data is returned.  Change to \code{FALSE} at your own risk.
 NOTE: Only a few checks can be skipped via this option, as there are some
-parameters that must be available in order to return an answer.}
+parameters that must be available in order to return any answer.}
 
-\item{debug}{Integer.  The level of debug reporting desired. 1
-or higher = basic info about
-each file, and import progress.  2 = detailed info about x values.
-3 = detailed info about y values. 4 = details about the DUP expansion
-process. 5 = details about the calculation of differences when DIF
-is in use.
+\item{debug}{Integer.  The level of debug reporting desired.
+1 or higher = import progress is reported.
+2 or higher = details about the variable lists, compression formats and
+parameters that were found.
+3 = detailed info about processing of the x values (huge!).
+4 = detailed view of the first five lines containing y values; may be helpful if
+the compression is not figured out correctly (via \code{getJDXcompression}).
+5 = detailed info about processing the y values when DUP is in use (huge!).
+6 = detailed info about processing the y values when DIF is in use (huge!).
 In cases where an error is about to
 stop execution, you get additional information regardless of
-the \code{debug} value.}
+the \code{debug} value.  With debug values that give a lot of information
+about the process, consider saving output using \code{sink()} for study.}
 }
 \value{
-A list.  The first element is the file metadata.  Additional elements
-contain the extracted \code{x,y} data in one or more data frames as follows.
-If the file contains multiple spectra
+A list, as follows: 
+
+\itemize{
+
+\item The first element is a data frame summarizing the pieces of the imported file.
+
+\item The second element is the file metadata.
+
+\item The third element is a integer vector giving the comment lines found
+      (exclusive of the metdata, which typically contains many comments).
+}
+
+ Additional elements contain the extracted data as follows:
+
+\itemize{
+
+\item If the file contains multiple spectra
 (not currently supported), there will be one data frame for each spectrum.
-If the file contains the real and imaginary
+
+\item If the file contains the real and imaginary
 parts of a 1D NMR spectrum, there will be two data frames, one containing the real portion
-and the other the imaginary portion.  If the file contains one non-NMR spectrum,
-a single data frame will be returned.  In all cases the data frame has
+and the other the imaginary portion.
+
+\item If the file contains one non-NMR spectrum,
+a single data frame will be returned.
+
+\item In all cases above, the data frame has
 elements \code{x} and \code{y}.
+
+\item In the case of 2D NMR data, additional list elements are returned including
+the F2 frequency values, the F1 frequency values, and a matrix containing the 2D data.
+
+}
 }
 \description{
-This is the function users should call, and supervises the entire import process.
+This function supervises the entire import process.
 The JCAMP-DX standard allows quite a bit of lattitude and there are many
 possible formats. Not all possible formats are supported; error messages will
 generally let you know what's going on.  If you have a file that you feel should be
 supported but gives an error, please file an issue at Github.
 The standard allows many
-variations and its impossible to test them all.
+variations and it is impossible to anticipate all configurations.
 }
 \section{Included Data Files}{
 
@@ -59,7 +87,7 @@ The examples make use of data files included with the package. File \code{SBO.jd
 is an IR spectrum of Smart Balance Original spread (a butter substitute). The
 spectrum is presented in transmission format, and was recorded on a ThermoFisher
 instrument.  The file uses AFFN compression, and was written
-with the JCAMP-DX 5.01 standard. Note that even though the y-axis is in 
+with the JCAMP-DX 5.01 standard. Note that even though the y-axis was recorded in 
 percent transmission, in the JDX file it is stored on [0\ldots1].
 File \code{PCRF.jdx} is a 1H NMR
 spectrum of a hexane extract of a reduced fat potato chip.  The spectrum was
@@ -72,20 +100,21 @@ File \code{PCRF_line265.jdx} has a deliberate error in it.  See the examples.
 
 Internally, this package uses a tolerance factor when comparing values during certain checks.
 This is currently hardwired to \code{0.0001*diff(range(values))}.  This value works fine
-in the test files.
-This appears to be necessary because the original values in the files
+for test files.
+This is necessary because the original values in the files
 are text strings of varying lengths which get converted to numerical values.  Some precision
 may be lost but it appears trivial with the current settings.
 }
+
 \examples{
 sbo <- system.file("extdata", "SBO.jdx", package = "readJDX")
 chk <- readJDX(sbo)
-plot(chk[[2]]$x, chk[[2]]$y/100, type = "l", main = "Original Smart Balance Spread",
+plot(chk[[4]]$x, chk[[4]]$y/100, type = "l", main = "Original Smart Balance Spread",
 	xlab = "wavenumber", ylab = "Percent Transmission")
 
 pcrf <- system.file("extdata", "PCRF.jdx", package = "readJDX")
 chk <- readJDX(pcrf)
-plot(chk[[2]]$x, chk[[2]]$y, type = "l", main = "Reduced Fat Potato Chip Extract",
+plot(chk[[4]]$x, chk[[4]]$y, type = "l", main = "Reduced Fat Potato Chip Extract",
 	xlab = "ppm", ylab = "Intensity")
 
 \dontrun{
@@ -100,4 +129,3 @@ chk <- readJDX(problem)
 Do \code{browseVignettes("readJCAMPDX")} for background information,
 references and supported formats.
 }
-

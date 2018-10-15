@@ -1,19 +1,21 @@
 ##'
-##' Extract the values in JCAMP-DX file with an XYY data table.
+##' Extract the values in JCAMP-DX file with an XYY variable list.
 ##'
 ##' This function is NOT EXPORTED.
 ##' Users would not normally call this function.  See \code{\link{readJDX}}.
 ##' Documentation is provided for developers wishing to contribute to the package.
 ##' 
-##' @param dt Character.  The data table to be processed.  Includes one pre-pended
+##' @param dt Character.  The variable list to be processed.  Includes one pre-pended
 ##' line giving the type of data (e.g. XYY, XRR, XII).
 ##'
 ##' @param params Numeric. Vector of parameters extracted from file header.
-##' NMR parameters are not the same as non-NMR parameters.
+##'
+##' @param params lineNos. A vector containing the original line numbers of this
+##'        variable list in the original file.  Used for debugging responses.
+##'
+##' @param mode Character. One of c("IR", "NMR", "NMR2D")
 ##'
 ##' @param debug Integer.  See \code{\link{readJDX}} for details.
-##'
-##' @param nlmd Integer.  The number of lines of meta data.  Used in debug reporting.
 ##'
 ##' @param SOFC Logical.  See \code{\link{readJDX}} for details.
 ##'
@@ -23,26 +25,41 @@
 ##'
 ##' @noRd
 
-decompressJDXxyy <- function (dt, params, debug = 0, nlmd, SOFC) {
-		
-	# For XYY, each line of the data table begins with a frequency
+decompressJDXxyy <- function (dt, params, mode, lineNos, SOFC, debug = 0) {
+	
+	
+	# For XYY, each line of the variable list begins with a frequency (x value)
 	# followed by the y values in various compressed formats.
 		
 	# Note that xString and yString are pieces corresponding to the individual lines
 	# of dt, each is of type character until fully decompressed.
 	
 	type <- dt[1]
-	dt <- dt[-1]
-	
+	dt <- dt[-1] # Remove the pre-pended format string
+	lineNos <- lineNos[-1] # Adjust accordingly
+		
 	if (type == "XRR") {if (debug >= 1) message("\nProcessing real data...")}
 	if (type == "XII") {if (debug >= 1) message("\nProcessing imaginary data...")}
-	if (type == "XYY") {if (debug >= 1) message("\nProcessing data table...")}
+	if (type == "XYY") {if (debug >= 1) message("\nProcessing variable list...")}
+	if (type == "F2") {
+		if (debug >= 1) {message("\nProcessing F2 spectra...", dt[1])}
+		dt <- dt[-1] # Remove e.g. ##PAGE= F1= 4.7865152724775
+		lineNos <- lineNos[-1] # Now just numbers remain to be processed
+		}
+		
+	if (length(dt) != length(lineNos)) stop("lineNos doesn't match variable list")
 
+	### CRITICAL: all operations that follow must perserve the original length
+	# of dt which matches the length of lineNos.  Comment-only lines will be
+	# converted to NA, which must be kept until they can be tossed, and when tossed,
+	# they must be tossed from both xString and yString at the same time.
+	
 	### Split each line of dt in an x part and y part
 	
 	numpat <- "[0-9]+[.,]?[0-9]*\\s*" # , needed for EU format (also need to pick up integers)
 	xString <- yString <- rep(NA_character_, length(dt))
 	for (i in 1:length(dt)) {
+		if (grepl("^\\$\\$", dt[i])) next # skip over comment only line, NA remains
 		pos <- str_locate(dt[i], numpat)[1,2]
 		xString[i] <- substring(dt[i], 1, pos)
 		yString[i] <- substring(dt[i], pos + 1, nchar(dt[i]))
@@ -50,56 +67,54 @@ decompressJDXxyy <- function (dt, params, debug = 0, nlmd, SOFC) {
 		
 	#### Process the x values to numeric
 
-	# The x values in the data table appear in most cases to
+	# The x values in the variable list appear in most cases to
 	# be significantly rounded relative to FIRSTX.
 	# It appears as though the intent of the standard is to construct the sequence of 
 	# x values from FIRSTX, LASTX, and NPOINTS, not the actual values in the
-	# in the data table. The values in the data table however must be
-	# checked for integrity (but see later for a work-around).
+	# in the variable list. The values in the variable list however must be
+	# checked for integrity.
 	
 	# Important: these xValues are only used to verify parsing is correct,
-	# e.g. there were no characters caught and no NA generated.
+	# e.g. there were no alpha characters caught and no NA generated when doing as.numeric.
 	# They are not used to construct the actual x values, that is done at
 	# the very end using the parameters.
 	
-	tmp <- xString # hold for debug reporting
+	tmp <- xString # copy for debug reporting
 	xString <- gsub(",", ".", xString) # replace ',' with '.' -- needed for EU style files
-	xValues <- as.numeric(xString)
+	xValues <- as.numeric(xString) # NA from comments remain
 	
-	if (debug == 2) { # stop and report each line if requested (huge!)
-		message("Here come the raw x values, line by line from the file")
-		for (i in 1:length(xValues)) {
-			cat("\nParsing line", i + nlmd, "for x values\n")
-			cat("\tx value (character):", tmp[i], "\n")
-			cat("\tx value (numeric):", xValues[i], "\n")
-			}
+	if (debug == 3) { # stop and report each line if requested (huge!)
+		message("\nHere are the x values:")
+		DF <- data.frame(lineNo = lineNos, X_as_Char = tmp, X_as_Num = xValues)
+		print(DF)
+		# for (i in 1:length(xValues)) {
+			# cat("\nParsing line", lineNos[i], "for x values\n")
+			# cat("\tx value (character):", tmp[i], "\n")
+			# cat("\tx value (numeric):", xValues[i], "\n")
+			# }
 		}
 	
 	# Save the first and last xValues for checking in a bit
 	firstXcheck <- xValues[1]
 	lastXcheck <- xValues[length(xValues)]
-	xtol <- 0.0001*diff(range(xValues))
+	xtol <- 0.0001*diff(range(xValues, na.rm = TRUE)) # Comments lead to NAs
 	
-	# The standard requires that
-	# each line in the data table be checked to make sure no lines were skipped or dupped.
-		
-	if (anyDuplicated(xValues)) stop("Data table appears to have duplicated lines")
+	# The standard requires that each line in the variable list be checked to make
+	# sure no lines were skipped or duplicated.	
+	if (anyDuplicated(xValues[!is.na(xValues)])) stop("Variable list appears to have duplicated lines")
+	
 	# Technically, this next line compares the row count, not the actual number of x and y values
 	if (length(yString) != length(xValues)) stop("The number of x values and y values aren't the same")
-	xValues <- NULL # safety mechanism; recomputed at end
+	xValues <- NULL # safety mechanism; recomputed later at higher resolution
 
 	### Process the y values to numeric
 	
-	NUM <- FALSE # flag to indicate we now have a numeric vector "answer"
+	NUM <- FALSE # flag to indicate we now have a numeric vector "answer" instead of character
 
  	yString <- gsub(",", ".", yString) # Replace ',' with '.' for EU style files
-
-	fmt <- getJDXcompression(yString, debug = debug) # Get the compression format
-	
-	# Check to see if yString has any comments in it: $$
-	# remove it and any following characters if found
-	
-	yString <- gsub("\\$\\$.*", "", yString)
+	yString <- gsub("\\s*\\$\\$.*", "", yString) # remove comments at end of lines (confuses getJDXcompression)
+	yStringTmp <- na.omit(yString) # Remove NAs from comments for the purpose of figuring out the compression scheme
+	fmt <- getJDXcompression(yStringTmp, debug = debug) # Get the compression format
 	
 	# Now deal with the various compression options
 	
@@ -107,21 +122,23 @@ decompressJDXxyy <- function (dt, params, debug = 0, nlmd, SOFC) {
 	# can proceed immediately to conversion to numeric, exponents handled automatically,
 	# and white space stripped off automatically.  It appears AFFN is never mixed
 	# with other formats; the other formats are collectively called ASDF in the standard.
-	
+		
 	if ("AFFN" %in% fmt) {
+
 		yString <- paste(yString, collapse = " ") # turn into one long string
-		yString <- strsplit(yString, split = " ")
+		yString <- strsplit(yString, split = "\\s+")
 		yString <- unlist(yString)
 		yString <- str_trim(yString, side = "both")
-		yValues <- na.omit(as.numeric(yString))
+		yString <- ifelse(yString == "NA", NA_character_, yString) # coercion gotcha!
+		yValues <- as.numeric(na.omit(yString)) # NAs from comments may still be present
 		NUM <- TRUE # done, control picks up at checking the results below
 		}
 		
 	if (!"AFFN" %in% fmt) {
 		# Break into pieces corresponding to individual numbers by inserting spaces
 		
-		# This PAC approach will not catch 123-j123 
 		# Put space ahead of +|- signs (PAC)
+		# This PAC approach will not catch 123-j123 
 		yString <- gsub("(\\+|-)([0-9]+)", " \\1\\2", yString)
 		
 		# Put space ahead of SQZ codes preceeded by a number
@@ -147,23 +164,26 @@ decompressJDXxyy <- function (dt, params, debug = 0, nlmd, SOFC) {
 		yString <- gsub("([S-Zs])", " \\1 ", yString)
 
  		# Check for DUP pseudo-digits and process if found.  This must be done first!
- 		if ("DUP" %in% fmt) yString <- insertDUPs(yString, debug, nlmd)
+ 		
+ 		if ("DUP" %in% fmt) yString <- insertDUPs(yString, lineNos, debug = debug)
 
 		# Now process SQZ	
  		if ("SQZ" %in% fmt) yString <- unSQZ(yString) # if pure SQZ this is sufficient
 			
 		# Finally, take care of any DIFs
-		# Done last, since only now do we have a number at what was the beginning of the line
+		# Done last, since only now do we have a number at what was the beginning of the line,
+		# which is the starting point for calculating the offsets.
+		# However, at this point, we are still dealing with character strings, not numbers
 		
  		if ("DIF" %in% fmt) {
-  			yValues <- deDIF(yString, debug, nlmd) #  Returns a numeric vector
+  			yValues <- deDIF(yString, lineNos, debug) #  Returns a numeric vector
  			# deDIF has it's own error checking, problems there will stop there.
 			NUM <- TRUE
 			}
 
-		# At this point, PAC needs no special handling, other formats have been handled
-		# Convert to numeric, if !DIF
-		
+		# At this point, PAC needs no special handling, other formats have been converted to
+		# numbers as characters except for DIF which is already numeric and NUM = TRUE.
+
 	if (!NUM) {
 
 		# Do things one step at a time and combine at the end.
@@ -179,7 +199,7 @@ decompressJDXxyy <- function (dt, params, debug = 0, nlmd, SOFC) {
 			ytmp <- as.numeric(ytmp)
 						
 			if (any(is.na(ytmp))) {
-				message("Problem: NA found at line no: ", i + nlmd, "!\n")
+				message("\nProblem: NA found at line no: ", lineNos[i], "!")
 				print(ytmp)
 				stop("Conversion to numeric introduced NA")
 				}
@@ -188,17 +208,16 @@ decompressJDXxyy <- function (dt, params, debug = 0, nlmd, SOFC) {
 			}
 				
 		yValues <- yValues[-1]
-		}				
+		}
+					
+	
 	} # end of !"AFFN"	
  	
- 	ytol <- 0.0001*diff(range(yValues))
+ 	ytol <- 0.0001*diff(range(yValues, na.rm = TRUE))
 
 	### Check the integrity of the results
-		
-	NMR <- FALSE
-	if (length(params) == 12) NMR <- TRUE
-	
-	if (!NMR) {
+			
+	if (mode == "IR") {
 		
 		# Check that we got the right number of y values
 		
@@ -208,8 +227,8 @@ decompressJDXxyy <- function (dt, params, debug = 0, nlmd, SOFC) {
 		firstY <- params[4]
 		factorX <- params[5]
 		factorY <- params[6]
-		if (debug >= 1) cat("\nNPOINTS =", npoints, "\n")
-		if (debug >= 1) cat("Actual no. data points found  =", length(yValues), "\n")
+		if (debug >= 2) cat("\nNPOINTS =", npoints, "\n")
+		if (debug >= 2) cat("Actual no. data points found  =", length(yValues), "\n")
 		
 		if (!npoints == length(yValues)) stop("NPOINTS and length of yValues don't match")
 
@@ -220,7 +239,7 @@ decompressJDXxyy <- function (dt, params, debug = 0, nlmd, SOFC) {
 		if (SOFC) {
 		
 			if (!isTRUE(all.equal(yValues[1]*factorY, firstY, check.names = FALSE, tolerance = ytol))) {
-				cat("First y value from data table:", yValues[1]*factorY, "\n")
+				cat("First y value from variable list:", yValues[1]*factorY, "\n")
 				cat("First y value from metadata:", firstY, "\n")
 				stop("Error parsing yValues")
 				}			
@@ -230,7 +249,7 @@ decompressJDXxyy <- function (dt, params, debug = 0, nlmd, SOFC) {
 		# but out of an abundance of caution we will do it.
 		
 		if (!isTRUE(all.equal(firstXcheck*factorX, firstX, check.names = FALSE, tolerance = xtol))) {
-			cat("First x value from data table:", firstXcheck*factorX, "\n")
+			cat("First x value from variable list:", firstXcheck*factorX, "\n")
 			cat("First x value from metadata:", firstX, "\n")
 			stop("Error parsing xValues (firstX)")
 			}			
@@ -239,7 +258,7 @@ decompressJDXxyy <- function (dt, params, debug = 0, nlmd, SOFC) {
 		
 		if ("DIF" %in% fmt) {
 			if (!isTRUE(all.equal(lastXcheck*factorX, lastX, check.names = FALSE, tolerance = xtol))) {
-				cat("Last x value from data table:", lastXcheck*factorX, "\n")
+				cat("Last x value from variable list:", lastXcheck*factorX, "\n")
 				cat("Last x value from metadata:", lastX, "\n")
 				stop("Error parsing xValues (lastX)")
 				}
@@ -251,9 +270,9 @@ decompressJDXxyy <- function (dt, params, debug = 0, nlmd, SOFC) {
 		xValues <- seq(firstX, lastX, by = dx)
 		yValues <- yValues*factorY
 		
-		} # end of !NMR
+		} # end of mode = "IR"
 		
-	if (NMR) {
+	if (mode == "NMR") {
 		
 		pointsX <- as.integer(params[1])
 		pointsR <- as.integer(params[2])
@@ -268,8 +287,8 @@ decompressJDXxyy <- function (dt, params, debug = 0, nlmd, SOFC) {
 		factorR <- params[11]
 		factorI <- params[12]
 		
-		if (debug >= 1) cat("\nNo. data points from metadata =", pointsX, "\n")
-		if (debug >= 1) cat("Actual no. data points found  =", length(yValues), "\n")
+		if (debug >= 2) cat("\nNo. data points from metadata =", pointsX, "\n")
+		if (debug >= 2) cat("Actual no. data points found  =", length(yValues), "\n")
 		
 		if (pointsX != length(yValues)) stop("Data points found != data points in metadata")
 				
@@ -277,7 +296,7 @@ decompressJDXxyy <- function (dt, params, debug = 0, nlmd, SOFC) {
 		# but out of an abundance of caution we will do it.
 		
 		if (!isTRUE(all.equal(firstXcheck*factorX, firstX, check.names = FALSE, tolerance = xtol))) {
-			cat("First x value from data table:", firstXcheck*factorX, "\n")
+			cat("First x value from variable list:", firstXcheck*factorX, "\n")
 			cat("First x value from metadata:", firstX, "\n")
 			stop("Error parsing xValues (firstX)")
 			}			
@@ -286,7 +305,7 @@ decompressJDXxyy <- function (dt, params, debug = 0, nlmd, SOFC) {
 		
 		if ("DIF" %in% fmt) {
 			if (!isTRUE(all.equal(lastXcheck*factorX, lastX, check.names = FALSE, tolerance = xtol))) {
-				cat("Last x value from data table:", lastXcheck*factorX, "\n")
+				cat("Last x value from variable list:", lastXcheck*factorX, "\n")
 				cat("Last x value from metadata:", lastX, "\n")
 				stop("Error parsing xValues (lastX)")
 				}
@@ -296,13 +315,13 @@ decompressJDXxyy <- function (dt, params, debug = 0, nlmd, SOFC) {
 		if (type == "XRR") { # Check yValues (real)
 						
 			if (!isTRUE(all.equal(yValues[1]*factorR, firstR, check.names = FALSE, tolerance = ytol))) {			
-				cat("First real value from data table:", yValues[1]*factorR, "\n")
+				cat("First real value from variable list:", yValues[1]*factorR, "\n")
 				cat("First real value from metadata:", firstR, "\n")
 				stop("Error parsing real values")
 				}
 			
 			if (!isTRUE(all.equal(yValues[length(yValues)]*factorR, lastR, check.names = FALSE, tolerance = ytol))) {		
-				cat("Last real value from data table:", yValues[length(yValues)]*factorR, "\n")
+				cat("Last real value from variable list:", yValues[length(yValues)]*factorR, "\n")
 				cat("Last real value from metadata:", lastR, "\n")
 				stop("Error parsing real values")
 				}
@@ -314,13 +333,13 @@ decompressJDXxyy <- function (dt, params, debug = 0, nlmd, SOFC) {
 		if (type == "XII") { # Check yValues (imaginary)
 
 			if (!isTRUE(all.equal(yValues[1]*factorI, firstI, check.names = FALSE, tolerance = ytol))) {		
-				cat("First imaginary value from data table:", yValues[1]*factorI, "\n")
+				cat("First imaginary value from variable list:", yValues[1]*factorI, "\n")
 				cat("First imaginary value from metadata:", firstI, "\n")
 				stop("Error parsing imaginary values")
 				}
 			
 			if (!isTRUE(all.equal(yValues[length(yValues)]*factorI, lastI, check.names = FALSE, tolerance = ytol))) {		
-				cat("Last imaginary value from data table:", yValues[length(yValues)]*factorI, "\n")
+				cat("Last imaginary value from variable list:", yValues[length(yValues)]*factorI, "\n")
 				cat("Last imaginary value from metadata:", lastI, "\n")
 				stop("Error parsing imaginary values")
 				}
@@ -335,9 +354,56 @@ decompressJDXxyy <- function (dt, params, debug = 0, nlmd, SOFC) {
 		dx <- (lastX-firstX)/(pointsX - 1)
 		xValues <- seq(firstX, lastX, by = dx)
 
-		} # end of NMR
+		} # end of mode = "NMR"
 		
+	if (mode == "NMR2D") {
+		
+		pointsF1 <- as.integer(params[1])
+		pointsF2 <- as.integer(params[2])
+		firstF1 <- params[3]
+		firstF2 <- params[4]
+		lastF1 <- params[5]
+		lastF2 <- params[6]
+		factorF1 <- params[7]
+		factorF2 <- params[8]
+		factorZ <- params[9]
+		
+		if (debug >= 2) cat("\nNo. F2 points from metadata =", pointsF2, "\n")
+		if (debug >= 2) cat("Actual F2 points found  =", length(yValues), "\n")
+		
+		if (pointsF2 != length(yValues)) stop("Data points found != data points in metadata")
+				
+		# Check first and last xValues (saved earlier).  The standard is ambiguous about doing this,
+		# but out of an abundance of caution we will do it.
+		
+		if (!isTRUE(all.equal(firstXcheck*factorF2, firstF2, check.names = FALSE, tolerance = xtol))) {
+			cat("First F2 value from variable list:", firstXcheck*factorF2, "\n")
+			cat("First F2 value from metadata:", firstF2, "\n")
+			stop("Error parsing xValues (firstF2)")
+			}			
+		
+		# Do a lastX check if DIF format (where there is a check point)
+		
+		if ("DIF" %in% fmt) {
+			if (!isTRUE(all.equal(lastXcheck*factorF2, lastF2, check.names = FALSE, tolerance = xtol))) {
+				cat("Last F2 value from variable list:", lastXcheck*factorF2, "\n")
+				cat("Last F2 value from metadata:", lastF2, "\n")
+				stop("Error parsing xValues (lastF2)")
+				}
+			}
+				
+		# There is a poorly-documented check of the first y value in the 2D NMR format.
+		# For the time-being we will not do the check, as it only checks one value.
+			
+		yValues = yValues*factorZ
+						
+		# Compute xValues based on params (see notes earlier)
+		
+		dx <- (lastF2-firstF2)/(pointsF2 - 1)
+		xValues <- seq(firstF2, lastF2, by = dx)
 
+		} # end of mode = "NMR2D"
+		
 	### And we're done...
 	
 	xydata <-data.frame(x = xValues, y = yValues)

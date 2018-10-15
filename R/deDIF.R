@@ -9,16 +9,14 @@
 ##'
 ##' @param debug Integer.  See \code{\link{readJDX}} for details.
 ##'
-##' @param nlmd Integer.  The number of lines of meta data.  Used in debug reporting.
-##'
 ##' @return A numeric vector.
 ##' 
 ##' @noRd
 ##'
-deDIF <- function(string, debug, nlmd) {
+deDIF <- function(string, lineNos, debug) {
 	
 	# The JCAMP std states that in DIF form the first entry on a line
-	# is an X value (already removed here), the 2nd value is in SQZ form
+	# is an X value (already removed), the 2nd value is in SQZ form
 	# and the subsequent values are differences between *adjacent* values:
 	# X, Y1, D1, D2, D3, D4...
 	# corresponding, after conversion, to:
@@ -35,43 +33,36 @@ deDIF <- function(string, debug, nlmd) {
 	# Step 1: Convert to a list which keeps the original lines intact but
 	# allows us to split the lines
 	
-	
 	string <- as.list(string)
 	FUN <- function(x) {unlist(strsplit(x, "\\s+"))}
 	string <- lapply(string, FUN)
-	names(string) <- paste("Line", nlmd + 1:length(string), sep = "_")
-	
-	if ((debug == 3) | (debug ==4)) message("Undoing DIF compression\n")
-	
-	if (debug == 5) {
-		message("First 5 lines of data table (step 1 in deDIF):")
-		print(string[1:5])
-		}
-	
+	names(string) <- paste("Line", lineNos, sep = "_")
+		
 	# Step 2: Convert the DIF characters to the corresponding numbers
-	
-	string <- lapply(string, unDIF)
-	values <- lapply(string, as.numeric)
+	# and fix offset
 
-	if (debug == 5) {
-		message("First 5 lines of data table (step 2 in deDIF):")
-		print(values[1:5])
-		}
-			
-	# Step 3: Fix the offsets
+	if (debug == 6) tmp_string <- string # save copy for reporting
 	
-	yValues <- lapply(values, cumsum)
+	yValues <- lapply(string, unDIF)
 	
-	if (debug == 5) {
-		message("First 5 lines of data table (step 3 in deDIF):")
-		print(yValues[1:5])
+	if (debug == 6) {
+		message("\nUndoing DIF compression:")
+		message("\nLines passed to deDIF:")
+		print(tmp_string)
+		message("\nLines processed by deDIF:")
+		print(yValues)		
+		# FD <- data.frame(
+			# string = unlist(tmp, use.names = FALSE),
+			# string_as_num = unlist(values, use.names = FALSE),
+			# final_value = unlist(yValues, use.names = FALSE))
+		# print(FD)
 		}
 		
-	# Step 4: Carry out the y value check required by the standard
+	# Step 3: Carry out the y value check required by the standard
 	# First value on a line should = last value on the prev. line.
 	# Names must be stripped for the all.equal check below.
 
-	if ((debug == 3) | (debug ==4)) message("Carrying out y value check")
+	if (debug == 6) message("\nCarrying out y value check...")
 	
 	fun <- function(x) {x[1]}
 	first <- unlist(lapply(yValues, fun), use.names = FALSE)
@@ -79,14 +70,14 @@ deDIF <- function(string, debug, nlmd) {
 	last <- unlist(lapply(yValues, fun), use.names = FALSE)
 		
 	for (i in 2:length(first)) {
+		if (is.na(first[i])) next # These originate from comment only lines e.g. Bruker NMR
 		ychk <- isTRUE(all.equal(first[i], last[i-1]))
 		if (!ychk) {
-			msg <- "\nY value check failed; nearby values:"
-			message(msg)
-			if (i <= 5) rpt <- 1:5
+			message("\nY value check failed; nearby values:")
+			if (i <= 5) rpt <- 2:6
 			if (i >= 6) rpt <- (i-2):(i+2)
 			if (i >= (length(first) - 2)) rpt <- (length(first) - 5):length(first)
-			DF <- data.frame(Line = rpt + nlmd,
+			DF <- data.frame(Line = lineNos[rpt],
 				FirstYonLine = first[rpt], LastYonPrevLine = last[rpt-1],
 				Problem = ifelse(first[rpt] == last[rpt-1], "", "*"))
 			print(DF)
@@ -95,16 +86,20 @@ deDIF <- function(string, debug, nlmd) {
 			stop("Y value check failed")
 			}
 		}
+
+	if (debug == 6) message("\ny value check successful...")
 		
-	# Step 5: Remove extra y values that were needed for the check
+	# Step 4: Remove extra y values that were needed for the check
 			
 	verylast <- yValues[[length(yValues)]] # save to replace in a moment
 	fun <- function(x) {x[-length(x)]}
 	yValues <- lapply(yValues, fun) # removes all values in last element
 	yValues[[length(yValues)]] <- verylast
 
-	# Step 6: Wrap up and return
+	# Step 5: Wrap up and return
 
+	# Note: comments are still NA and lineNos is still correct
+	
 	return(unlist(yValues))		
 	
 	} # end of deDIF

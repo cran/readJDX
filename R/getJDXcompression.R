@@ -6,7 +6,7 @@
 ##' Documentation is provided for developers wishing to contribute to the package.
 ##' 
 ##' @param string Character.  The string to be checked.  If a vector of
-##' strings it will be collapsed.
+##' strings it will be collapsed to a single string.
 ##'
 ##' @param debug Integer.  See \code{\link{readJDX}} for details.
 ##'
@@ -31,14 +31,18 @@ getJDXcompression <- function (string, debug = 0){
 		}
 
 	instring <- string # save a copy for debug reporting
-	string <- paste(string, collapse = " ") # concantenate into one long string
+	
+	# For the purposes of determining the format, all comments should have been dropped
+	# before arriving here, an comments could contain any characters which will confuse
+	# the process here.
+	string <- paste(string, collapse = " ")
 
 	AFFN <- PAC <- SQZ <- DIF <- FMT <- DUP <- FALSE # FMT is a flag to indicate some format has been found
 
-	if (debug == 3) { 	# Reporting these now shows strings that will fail
+	if (debug == 4) { 	# Reporting these now shows strings that will fail
 						# later when the format it not understood
 		message("\nDetermining compression method...")
-		message("1st 5 lines (x values stripped off):\n")
+		message("1st 5 lines (x values stripped off):")
 		print(instring[1:5])
 		}
 
@@ -55,14 +59,13 @@ getJDXcompression <- function (string, debug = 0){
 	# Check to see if DUP is in use
 	if (grepl("[S-Zs]", string)) DUP <- TRUE
 
-	if (debug >= 1) {
+	if (debug >= 2) {
 		message("\nCompression formats in use:")
 		cat("AFFN =", AFFN, "\n")
 		cat("PAC =", PAC, "\n")
 		cat("SQZ =", SQZ, "\n")
 		cat("DIF =", DIF, "\n")
 		cat("DUP =", DUP, "\n")
-		cat("\n")
 		}
 
 	# Check that some format was recognized.

@@ -1,13 +1,13 @@
 ##'
 ##' Import a File Written in the JCAMP-DX Format
 ##'
-##' This is the function users should call, and supervises the entire import process.
+##' This function supervises the entire import process.
 ##' The JCAMP-DX standard allows quite a bit of lattitude and there are many
 ##' possible formats. Not all possible formats are supported; error messages will
 ##' generally let you know what's going on.  If you have a file that you feel should be
 ##' supported but gives an error, please file an issue at Github.
 ##' The standard allows many
-##' variations and its impossible to test them all.
+##' variations and it is impossible to anticipate all configurations.
 ##'
 ##' @param file Character.  The file name to import.
 ##'
@@ -23,27 +23,55 @@
 ##' The default is \code{TRUE} i.e. stop when something is not right.
 ##' This ensures that correct data is returned.  Change to \code{FALSE} at your own risk.
 ##' NOTE: Only a few checks can be skipped via this option, as there are some
-##' parameters that must be available in order to return an answer.
+##' parameters that must be available in order to return any answer.
 ##'
-##' @param debug Integer.  The level of debug reporting desired. 1
-##' or higher = basic info about
-##' each file, and import progress.  2 = detailed info about x values.
-##' 3 = detailed info about y values. 4 = details about the DUP expansion
-##' process. 5 = details about the calculation of differences when DIF
-##' is in use.
+##' @param debug Integer.  The level of debug reporting desired.
+##' 1 or higher = import progress is reported.
+##' 2 or higher = details about the variable lists, compression formats and
+##' parameters that were found.
+##' 3 = detailed info about processing of the x values (huge!).
+##' 4 = detailed view of the first five lines containing y values; may be helpful if
+##' the compression is not figured out correctly (via \code{getJDXcompression}).
+##' 5 = detailed info about processing the y values when DUP is in use (huge!).
+##' 6 = detailed info about processing the y values when DIF is in use (huge!).
 ##' In cases where an error is about to
 ##' stop execution, you get additional information regardless of
-##' the \code{debug} value.
+##' the \code{debug} value.  With debug values that give a lot of information
+##' about the process, consider saving output using \code{sink()} for study.
 ##'
-##' @return A list.  The first element is the file metadata.  Additional elements
-##' contain the extracted \code{x,y} data in one or more data frames as follows.
-##' If the file contains multiple spectra
+##' @return A list, as follows: 
+##'
+##' \itemize{
+##'
+##' \item The first element is a data frame summarizing the pieces of the imported file.
+##'
+##' \item The second element is the file metadata.
+##'
+##' \item The third element is a integer vector giving the comment lines found
+##'       (exclusive of the metdata, which typically contains many comments).
+##' }
+##'
+##'  Additional elements contain the extracted data as follows:
+##'
+##' \itemize{
+##'
+##' \item If the file contains multiple spectra
 ##' (not currently supported), there will be one data frame for each spectrum.
-##' If the file contains the real and imaginary
+##'
+##' \item If the file contains the real and imaginary
 ##' parts of a 1D NMR spectrum, there will be two data frames, one containing the real portion
-##' and the other the imaginary portion.  If the file contains one non-NMR spectrum,
-##' a single data frame will be returned.  In all cases the data frame has
+##' and the other the imaginary portion.
+##' 
+##' \item If the file contains one non-NMR spectrum,
+##' a single data frame will be returned.
+##'
+##' \item In all cases above, the data frame has
 ##' elements \code{x} and \code{y}.
+##'
+##' \item In the case of 2D NMR data, additional list elements are returned including
+##' the F2 frequency values, the F1 frequency values, and a matrix containing the 2D data.
+##'
+##' }
 ##'
 ##' @seealso Do \code{browseVignettes("readJCAMPDX")} for background information,
 ##' references and supported formats.
@@ -53,7 +81,7 @@
 ##' is an IR spectrum of Smart Balance Original spread (a butter substitute). The
 ##' spectrum is presented in transmission format, and was recorded on a ThermoFisher
 ##' instrument.  The file uses AFFN compression, and was written
-##' with the JCAMP-DX 5.01 standard. Note that even though the y-axis is in 
+##' with the JCAMP-DX 5.01 standard. Note that even though the y-axis was recorded in 
 ##' percent transmission, in the JDX file it is stored on [0\ldots1].
 ##' File \code{PCRF.jdx} is a 1H NMR
 ##' spectrum of a hexane extract of a reduced fat potato chip.  The spectrum was
@@ -64,8 +92,8 @@
 ##' @section Precision:
 ##' Internally, this package uses a tolerance factor when comparing values during certain checks.
 ##' This is currently hardwired to \code{0.0001*diff(range(values))}.  This value works fine
-##' in the test files.
-##' This appears to be necessary because the original values in the files
+##' for test files.
+##' This is necessary because the original values in the files
 ##' are text strings of varying lengths which get converted to numerical values.  Some precision
 ##' may be lost but it appears trivial with the current settings.
 ##' 
@@ -76,12 +104,12 @@
 ##' @examples
 ##' sbo <- system.file("extdata", "SBO.jdx", package = "readJDX")
 ##' chk <- readJDX(sbo)
-##' plot(chk[[2]]$x, chk[[2]]$y/100, type = "l", main = "Original Smart Balance Spread",
+##' plot(chk[[4]]$x, chk[[4]]$y/100, type = "l", main = "Original Smart Balance Spread",
 ##' 	xlab = "wavenumber", ylab = "Percent Transmission")
 ##' 
 ##' pcrf <- system.file("extdata", "PCRF.jdx", package = "readJDX")
 ##' chk <- readJDX(pcrf)
-##' plot(chk[[2]]$x, chk[[2]]$y, type = "l", main = "Reduced Fat Potato Chip Extract",
+##' plot(chk[[4]]$x, chk[[4]]$y, type = "l", main = "Reduced Fat Potato Chip Extract",
 ##' 	xlab = "ppm", ylab = "Intensity")
 ##' 
 ##' \dontrun{
@@ -106,72 +134,80 @@ readJDX <- function (file = "", SOFC = TRUE, debug = 0){
 
 	# A data block consists of ##TITLE= up to ##END=
 	# However, link blocks can be used to contain data blocks, in which
-	# case one has a compound file (not supported).
+	# case one has a compound file.  I have never seen this in the wild.
+	# Link blocks are not supported. NMR data sets, including 2D NMR data sets,
+	# use a different scheme to hold multiple data sets.
 	
-	# Consider searching for something more robust.
-	
-	cmpd <- FALSE
+	IR <- TRUE # until proven otherwise; IR stands in Raman, UV, etc
 	NMR <- FALSE
+	NMR2D <- FALSE
+	
 	blocks <- grep("^\\s*##TITLE\\s*=.*", jdx)
 	nb <- length(blocks)
 	if (nb == 0) stop("This does not appear to be a JCAMP-DX file")
-	if (nb > 1) {
-		cmpd <- TRUE
-		if (cmpd) stop("Compound (multi-block / multi-spectra) data sets not supported")
-		}
+	if (nb > 1) stop("Compound (multi-block / multi-spectra) data sets not supported")
 
 	ntup <- grepl("^\\s*##NTUPLES", jdx)
-	if (any(ntup)) {
-		NMR <- TRUE
-		nb <- 2 # real & imaginary data
-		}
-		
-	if (debug >= 1) message("\n\nProcessing file ", file, "\n")
+	nD <- grepl("^\\s*##NTUPLES=\\s*nD", jdx)
+	if (any(ntup) & !any(nD)) NMR <- TRUE
+	if (any(ntup) & any(nD)) NMR2D <- TRUE
 			
-##### Step 2. Locate the parameters and the data table
-##### Store each separately as a list element
+	if (debug >= 1) message("\n\nProcessing file ", file)
+			
+##### Step 2. Locate the parameters and the variable list(s)
 
-	dblist <- findDataTables(jdx, file, debug)
-	nlmd <- lengths(dblist) # save for other functions: will allow debug reporting by original line no.
+	if (IR) mode <- "IR"
+	if (NMR) mode <- "NMR"
+	if (NMR2D) mode <- "NMR2D"
 	
-	# Get the string that comes after title, and use that as the name
-	# in the returned list.
-	# This code could be moved to findDataTables at some point.
-	
-	if (!NMR) {
-		specnames <- jdx[blocks] # each line with title
-		specnames <- str_trim(substring(specnames, 9, nchar(specnames)))
-		}
-		
-	if (NMR) specnames <- c("real", "imaginary")
-	
-	specnames <- c("metadata", specnames)
-	if (length(specnames) != nb+1) stop("Something went setting up the data list")
-	names(dblist) <- specnames
-	
-	# Remove comment-only lines from the data tables (these mess up processing later)
-	# They also pose challenges for reporting errors by original line no.
-	
-	toss <- 0L
-	for (i in 2:length(dblist)) {
-		tmp <- grep("^\\$\\$", dblist[[i]])
-		toss <- c(toss, length(tmp))
-		if (length(tmp) != 0) dblist[[i]] <- dblist[[i]][-tmp]
-		}
+	dblist <- findDataTables(jdx, debug)
 		
 ##### Step 3. Extract the needed parameters
 
-	params <- extractParams(dblist[[1]], NMR, SOFC, debug)
-	
-##### Step 4.  Process the data table(s)
+	params <- extractParams(dblist[[2]], mode, SOFC, debug)
+		
+##### Step 4.  Process the variable list(s) into the final lists
 
-	for (i in 2:length(dblist)) dblist[[i]] <- {
-		processDataTable(dblist[[i]], params, debug, sum(nlmd[1:(i-1)])+toss[i], SOFC)
+	if ((mode == "IR") | (mode == "NMR")) {
+		# Return value is a list: dataGuide, metadata, comment lines + data frames of x, y
+		# dataGuide, metadata & comments already in place; process each variable list
+
+		for (i in 4:length(dblist)) {
+			dblist[[i]] <- processDataTable(dblist[[i]], params, mode, dblist[[1]][i-2, c(2,3)], SOFC, debug)
 		}
+
+		# Fix up names
+		if (mode == "IR") {
+			specnames <- jdx[blocks] # each line with title
+			specnames <- str_trim(substring(specnames, 9, nchar(specnames)))		
+		}
+
+		if (mode == "NMR") specnames <- c("real", "imaginary")
+	
+		names(dblist) <- c("dataGuide", "metadata", "commentLines", specnames)
+	}
+
+		
+	if (mode == "NMR2D") {
+		# Return value is a list: dataGuide, metadata, comment lines, F2, F1, + a matrix w/2D data
+		# dataGuide, metadata & comments already in place; add F2, F1, M and drop extra stuff
+		M <- matrix(NA_real_, ncol = params[2], nrow = params[1]) # matrix to store result
+		
+		for (i in 4:length(dblist)) {
+			tmp <- processDataTable(dblist[[i]], params, mode, dblist[[1]][i-2, c(2,3)], SOFC, debug)
+			M[i-3,] <- tmp$y
+		}
+		# Update dblist
+		dblist[[4]] <- seq(params[4], params[6], length.out = params[2]) # add F2
+		dblist[[5]] <- seq(params[3], params[5], length.out = params[1]) # add F1
+		dblist[[6]] <- M
+		dblist <- dblist[1:6] # toss the other stuff
+		names(dblist) <- c("dataGuide", "metadata", "commentLines", "F2", "F1", "Matrix")
+	}
 		
 ##### And we're done!
 
-	if (debug >= 1) message("\n\nDone processing ", file, "\n")
+	if (debug >= 1) message("\nDone processing ", file)
 
 	return(dblist)
 	
