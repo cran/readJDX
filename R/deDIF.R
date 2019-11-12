@@ -1,109 +1,53 @@
-##'
-##' Process DIF Encoded Strings
-##'
-##' This function is NOT EXPORTED.
-##' Users would not normally call this function.  See \code{\link{readJDX}}.
-##' Documentation is provided for developers wishing to contribute to the package.
-##'
-##' @param string Character.  String to be processed.
-##'
-##' @param debug Integer.  See \code{\link{readJDX}} for details.
-##'
-##' @return A numeric vector.
-##' 
-##' @noRd
-##'
-deDIF <- function(string, lineNos, debug) {
-	
-	# The JCAMP std states that in DIF form the first entry on a line
-	# is an X value (already removed), the 2nd value is in SQZ form
-	# and the subsequent values are differences between *adjacent* values:
-	# X, Y1, D1, D2, D3, D4...
-	# corresponding, after conversion, to:
-	# X, Y1, Y2, Y3, Y4, Y5...
-	# where D3 is the offset from D2 for example. So to construct
-	# Y4 you must do Y1 + D1 + D2 + D3
+#'
+#' Process DIF Encoded Strings
+#'
+#' This function is NOT EXPORTED.
+#' Users would not normally call this function.  See \code{\link{readJDX}}.
+#' Documentation is provided for developers wishing to contribute to the package.
+#'
+#' @param i Integer. Essentially the index into \code{lineList}.
+#'
+#' @param lineList A list, named with the line numbers.  Elements are character vectors, whose entries
+#' are named with the ASDF compression mode.  X values still present.
+#'
+#' @param debug Integer.  See \code{\link{readJDX}} for details.
+#'
+#' @return A numeric vector.
+#'
+#' @noRd
+#'
+deDIF <- function(i, lineList, debug = 0) {
 
-	# Note: DUPs should be handled before arriving at this function,
-	# and SQZ values should have been converted to numbers already.
-	# This is the last step!
-	
-	# As received, the string is composed of numeric values and DIF characters
-	
-	# Step 1: Convert to a list which keeps the original lines intact but
-	# allows us to split the lines
-	
-	string <- as.list(string)
-	FUN <- function(x) {unlist(strsplit(x, "\\s+"))}
-	string <- lapply(string, FUN)
-	names(string) <- paste("Line", lineNos, sep = "_")
-		
-	# Step 2: Convert the DIF characters to the corresponding numbers
-	# and fix offset
+  # The JCAMP std states that in DIF form the first entry on a line
+  # is an X value, the 2nd value is in SQZ form
+  # and the subsequent values are differences between *adjacent* values:
+  # X, Y1, D1, D2, D3, D4...
+  # corresponding, after conversion, to:
+  # X, Y1, Y2, Y3, Y4, Y5...
+  # where D3 is the offset from D2 for example. So to construct
+  # Y4 you must do Y1 + D1 + D2 + D3
+  # However, DIF mode can be mixed with other modes, so
+  # DUPs should be handled before arriving at this function,
+  # and SQZ values should have been converted to numbers already.
+  # This is the last step, only the DIF'ing needs to be done.
 
-	if (debug == 6) tmp_string <- string # save copy for reporting
-	
-	yValues <- lapply(string, unDIF)
-	
-	if (debug == 6) {
-		message("\nUndoing DIF compression:")
-		message("\nLines passed to deDIF:")
-		print(tmp_string)
-		message("\nLines processed by deDIF:")
-		print(yValues)		
-		# FD <- data.frame(
-			# string = unlist(tmp, use.names = FALSE),
-			# string_as_num = unlist(values, use.names = FALSE),
-			# final_value = unlist(yValues, use.names = FALSE))
-		# print(FD)
-		}
-		
-	# Step 3: Carry out the y value check required by the standard
-	# First value on a line should = last value on the prev. line.
-	# Names must be stripped for the all.equal check below.
+  # As received, the string is composed of numeric values and DIF characters
 
-	if (debug == 6) message("\nCarrying out y value check...")
-	
-	fun <- function(x) {x[1]}
-	first <- unlist(lapply(yValues, fun), use.names = FALSE)
-	fun <- function(x) {x[length(x)]}
-	last <- unlist(lapply(yValues, fun), use.names = FALSE)
-		
-	for (i in 2:length(first)) {
-		if (is.na(first[i])) next # These originate from comment only lines e.g. Bruker NMR
-		ychk <- isTRUE(all.equal(first[i], last[i-1]))
-		if (!ychk) {
-			message("\nY value check failed; nearby values:")
-			if (i <= 5) rpt <- 2:6
-			if (i >= 6) rpt <- (i-2):(i+2)
-			if (i >= (length(first) - 2)) rpt <- (length(first) - 5):length(first)
-			DF <- data.frame(Line = lineNos[rpt],
-				FirstYonLine = first[rpt], LastYonPrevLine = last[rpt-1],
-				Problem = ifelse(first[rpt] == last[rpt-1], "", "*"))
-			print(DF)
-			message("\nCorresponding complete lines processed from original file:")
-			print(yValues[rpt])
-			stop("Y value check failed")
-			}
-		}
+  # Convert the DIF characters to the corresponding numbers and fix offset
 
-	if (debug == 6) message("\ny value check successful...")
-		
-	# Step 4: Remove extra y values that were needed for the check
-			
-	verylast <- yValues[[length(yValues)]] # save to replace in a moment
-	fun <- function(x) {x[-length(x)]}
-	yValues <- lapply(yValues, fun) # removes all values in last element
-	yValues[[length(yValues)]] <- verylast
-
-	# Step 5: Wrap up and return
-
-	# Note: comments are still NA and lineNos is still correct
-	
-	return(unlist(yValues))		
-	
-	} # end of deDIF
+  if (debug == 6) tmp_string <- lineList[[i]] # save copy for reporting
 
 
+  # A single string has arrived here, as this was called on a list via lapply
+  string <- unDIF(lineList[[i]])
 
+  if (debug == 6) {
+    cat("\nUndoing DIF compression:\n")
+    cat("\n  ", names(lineList[i]), "passed to deDIF:\n")
+    print(tmp_string)
+    cat("\n  ", names(lineList[i]), "as processed by deDIF:\n")
+    print(string)
+  }
 
+  string
+} # end of deDIF

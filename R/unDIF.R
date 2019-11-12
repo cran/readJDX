@@ -1,57 +1,66 @@
-##'
-##' Convert from DIF Format to a Numeric Vector
-##'
-##' This function is NOT EXPORTED.
-##' Users would not normally call this function.  See \code{\link{readJDX}}.
-##' Documentation is provided for developers wishing to contribute to the package.
-##' 
-##' @param string Character.  The string to be converted.
-##'
-##' @return A numeric vector.
-##'
-##' @aliases unDIF unSQZ
-##'
-##' @importFrom stringr str_detect str_replace_all
-##'
-##' @noRd
+#'
+#' Convert from DIF Format to a Numeric Vector
+#'
+#' This function is NOT EXPORTED.
+#' Users would not normally call this function.  See \code{\link{readJDX}}.
+#' Documentation is provided for developers wishing to contribute to the package.
+#'
+#' @param line Character. A character vector to be converted. Named with compression codes.
+#'
+#' @return A numeric vector with the final values, named with the compression codes.
+#'
+#' @importFrom stringr str_detect str_replace_all
+#'
+#' @noRd
+#'
 
-unDIF <- function(string) {
-	pat <- "[%JKLMNOPQRjklmnopqr]"
-	dflag <- str_detect(string, pat) # flag to mark where the DIF codes are in the string
-	string <- str_replace_all(string,
-		c("%" = "0",  # effectively the same as a DUP character
-		  "J" = "1",
-		  "K" = "2",
-		  "L" = "3",
-		  "M" = "4",
-		  "N" = "5",
-		  "O" = "6",
-		  "P" = "7",
-		  "Q" = "8",
-		  "R" = "9",
-		  "j" = "-1",
-		  "k" = "-2",
-		  "l" = "-3",
-		  "m" = "-4",
-		  "n" = "-5",
-		  "o" = "-6",
-		  "p" = "-7",
-		  "q" = "-8",
-		  "r" = "-9"))
-		  
-	string <- as.numeric(string)
-	values <- rep(NA_real_, length(string))
-	for (i in 1:length(values)) { # amounts to cumsum over only selected portions of the string
-		if (!dflag[i]) {values[i] <- string[i]; next}
-		if (dflag[i]) values[i] <- string[i] + values[i-1]
-	}
-	
-	return(values)	
-	}
-	
-	
-	
-# Test line
-#line <- c("32000", "32000", "32000", "n", "o", "k", "L", "L", "m", "j1", "p", "%", "K", "J", "%", "j", "j", "M", "M", "%", "m", "n", "n", "l", "%", "L", "K", "J", "%", "K", "j", "n", "j2", "j9", "k9", "k6", "p", "J9", "K7", "J4", "o", "j2", "k", "J7", "K8", "K3", "J2", "L", "%")
+unDIF <- function(line) {
+  lineNames <- names(line) # save for updating later
 
-#line2 <- c("31992", "k", "j", "J", "L", "L", "K", "J", "%", "k", "m", "j", "K", "L", "K", "l", "l", "l", "K", "K", "%", "k", "j", "%", "J", "J", "K", "%", "j", "J", "K", "J", "%", "%", "%", "k", "k", "k", "%", "%", "%", "%", "%", "j", "%", "%", "%", "L", "M", "%", "j", "K", "k", "l", "l", "j", "L", "M", "L", "%", "%", "%", "%", "%", "8", "k", "%", "j", "J", "%")
+  # DIF codes can be interspersed with SQZ etc, so locate the DIFs and deal with them.
+
+  # Mark the DIF codes
+  pat <- "[%J-Rj-r]"
+  dflag <- str_detect(line, pat) # flag to mark where the DIF codes are in the string
+  # note that entries labeled DUP will still be flagged correctly since the character string has
+  # the DIF code in it (that means one cannot use the names as the flag)
+
+  # Replace the characters with numbers
+  line <- str_replace_all(
+    line,
+    c(
+      "%" = "0", # effectively the same as a DUP character (add nothing, i.e. repeat the character)
+      "J" = "1",
+      "K" = "2",
+      "L" = "3",
+      "M" = "4",
+      "N" = "5",
+      "O" = "6",
+      "P" = "7",
+      "Q" = "8",
+      "R" = "9",
+      "j" = "-1",
+      "k" = "-2",
+      "l" = "-3",
+      "m" = "-4",
+      "n" = "-5",
+      "o" = "-6",
+      "p" = "-7",
+      "q" = "-8",
+      "r" = "-9"
+    )
+  )
+
+  numLine <- as.numeric(line)
+  values <- rep(NA_real_, length(numLine))
+
+  # Do the DIF
+  # Note X values are automatically skipped over since the first two entries are NUM SQZ
+  for (i in 1:length(values)) { # amounts to cumsum over only selected portions of the string
+    if (!dflag[i]) values[i] <- numLine[i]
+    if (dflag[i]) values[i] <- numLine[i] + values[i - 1]
+  }
+
+  names(values) <- lineNames
+  values
+}
