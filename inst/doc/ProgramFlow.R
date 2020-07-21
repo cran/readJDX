@@ -1,4 +1,4 @@
-## ----results = "hide", echo = FALSE--------------------------------------
+## ----results = "hide", echo = FALSE-------------------------------------------
 library("readJDX")
 suppressPackageStartupMessages(library("kableExtra"))
 rm(list = ls())
@@ -9,13 +9,13 @@ knitr::opts_chunk$set(tidy = TRUE,
   fig.height = 7, fig.width = 7,
   fig.fullwidth = TRUE, echo = FALSE)
 
-## ----progFlow, results = "asis"------------------------------------------
+## ----progFlow, results = "asis"-----------------------------------------------
 fName <- c(
   "readJDX",
   "- findVariableLists",
   "- extractParams",
   "- processVariableList",
-  "- - decompressXYY", # 5
+  "- - processXYY", # 5
   "- - - decompLines",
   "- - - - getComp",
   "- - - - unSQZ",
@@ -23,7 +23,8 @@ fName <- c(
   "- - - - - repDUPs", # 10
   "- - - - deDIF",
   "- - - - - unDIF",
-  "- - - - yValueCheck"
+  "- - - - yValueCheck",
+  "- - processPT"
   )
 
 fInput <- c(
@@ -39,7 +40,8 @@ fInput <- c(
   "a string of length one", # 10
   "*list* of character vectors from a single VL; the character vectors are named with the ASDF mode, the list is named with line numbers",
   "character vector: one line from VL, entries named by ASDF code",
-  "*list* of character vectors from a single VL; the character vectors are named with the ASDF mode, the list is named with line numbers"
+  "*list* of character vectors from a single VL; the character vectors are named with the ASDF mode, the list is named with line numbers",
+  "character vector: a single VL"
   )
 
 DF <- data.frame(fName, fInput)

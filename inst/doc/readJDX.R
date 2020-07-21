@@ -1,4 +1,4 @@
-## ----results = "hide", echo = FALSE--------------------------------------
+## ----results = "hide", echo = FALSE-------------------------------------------
 library("readJDX")
 rm(list = ls())
 
