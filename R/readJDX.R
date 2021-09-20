@@ -161,10 +161,11 @@
 #' # Capturing processing for troubleshooting
 #' mdd <- system.file("extdata", "MiniDIFDUP.JDX", package = "readJDX")
 #' tf <- tempfile(pattern = "Troubleshooting", fileext = "txt")
+#' sinkall(tf)
 #' chk <- readJDX(mdd, debug = 6)
 #' sinkall() # close the file connection
 #' file.show(tf)
-#'
+#' 
 #' # 2D HETCORR spectrum
 #' \dontrun{
 #' nmr2d <- system.file("extdata", "isasspc1.dx", package = "readJDX")
@@ -213,11 +214,12 @@ readJDX <- function(file = "", SOFC = TRUE, debug = 0) {
 
   fmt <- VL[["DataGuide"]][, "Format"][-1]
   mode <- NA_character_
-  if ("XYY" %in% fmt) mode <- "XY_data"
+  if ("XYY" %in% fmt) mode <- "XYY"
   if ("XRR" %in% fmt) mode <- "NMR_1D" # these files also contain XII
   if ("NMR_2D" %in% fmt) mode <- "NMR_2D"
   if ("LC_MS" %in% fmt) mode <- "LC_MS"
-  if ("PEAK_TABLE" %in% fmt) mode <- "PEAK_TABLE"
+  if ("PEAK_TABLE" %in% fmt) mode <- "XYXY" # handled the same as the next one
+  if ("XYXY" %in% fmt) mode <- "XYXY"
   if (is.na(mode)) stop("Could not determine the type of data in the file")
 
   if (debug >= 1) cat("\n\nProcessing file", file, "which appears to contain", mode, "data\n")
@@ -228,16 +230,16 @@ readJDX <- function(file = "", SOFC = TRUE, debug = 0) {
 
   ##### Step 4.  Process the variable list(s) into the final list that is returned
 
-  if ((mode == "XY_data") | (mode == "NMR_1D")) {
+  if ((mode == "XYY") | (mode == "NMR_1D")) {
     # Return value is a list: dataGuide, metadata, comment lines + data frames of x, y
     # dataGuide, metadata & comments already in place; process each variable list
 
     for (i in 4:length(VL)) {
-      VL[[i]] <- processVariableList(VL[[i]], params, mode, VL[[1]][i - 2, c(2, 3)], SOFC, debug)
+      VL[[i]] <- processVariableList(VL[[i]], params, mode, SOFC, debug)
     }
 
     # Fix up names
-    if (mode == "XY_data") {
+    if (mode == "XYY") {
       specnames <- jdx[blocks] # each line with ##TITLE= (there is only one however)
       specnames <- str_trim(substring(specnames, 9, nchar(specnames)))
     }
@@ -254,15 +256,18 @@ readJDX <- function(file = "", SOFC = TRUE, debug = 0) {
     M <- matrix(NA_real_, ncol = params[2], nrow = params[1]) # matrix to store result
 
     for (i in 4:length(VL)) {
-      tmp <- processVariableList(VL[[i]], params, mode, VL[[1]][i - 2, c(2, 3)], SOFC, debug)
+      tmp <- processVariableList(VL[[i]], params, mode, SOFC, debug)
       M[i - 3, ] <- tmp$y
     }
+
+    # TODO: check for na in M, if any present we did not find enough pages to fill it and something is wrong
+
     # Update VL
-    VL[[4]] <- sort(seq(params[4], params[6], length.out = params[2])) # add F2
-    VL[[5]] <- sort(seq(params[3], params[5], length.out = params[1])) # add F1
+    VL[[4]] <- sort(seq(params[4], params[6], length.out = params[2])) # replace element 4 with F2
+    VL[[5]] <- sort(seq(params[3], params[5], length.out = params[1])) # replace element 5 with  F1
     M <- M[nrow(M):1, ] # reverse order of rows, works for Bruker files (all vendors?)
-    VL[[6]] <- M
-    VL <- VL[1:6] # toss the other stuff
+    VL[[6]] <- M  # replace element 6 with M
+    VL <- VL[1:6] # toss the remaining pieces of raw VL
     names(VL) <- c("dataGuide", "metadata", "commentLines", "F2", "F1", "Matrix")
   }
 
@@ -270,20 +275,20 @@ readJDX <- function(file = "", SOFC = TRUE, debug = 0) {
     # Return value is a list: dataGuide, metadata, comment lines, a data frame for each time point
     # dataGuide, metadata & comments already in place; add data frames for each time point
     for (i in 4:length(VL)) {
-      VL[[i]] <- processVariableList(VL[[i]], params, mode, VL[[1]][i - 2, c(2, 3)], SOFC, debug)
+      VL[[i]] <- processVariableList(VL[[i]], params, mode, SOFC, debug)
       
     }
 
-    # Get the retention times
+    # Get the retention times & use to label list elements
     rti <- grep("##PAGE= T=", jdx)
     rt <- jdx[rti]
     rt <- sub("##PAGE= ", "", rt)
     names(VL) <- c("dataGuide", "metadata", "commentLines", rt)
   }
 
-  if (mode == "PEAK_TABLE") {
+  if (mode == "XYXY") {
     for (i in 4:length(VL)) {
-      VL[[i]] <- processVariableList(VL[[i]], params, mode, VL[[1]][i - 2, c(2, 3)], SOFC, debug)
+      VL[[i]] <- processVariableList(VL[[i]], params, mode, SOFC, debug)
     }
     specnames <- jdx[blocks] # each line with ##TITLE= (there is only one however)
     specnames <- str_trim(substring(specnames, 9, nchar(specnames)))

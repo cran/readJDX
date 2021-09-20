@@ -1,20 +1,15 @@
 #'
-#' Extract the values in JCAMP-DX file with an XYY variable list.
+#' Extract the values in JCAMP-DX file with a (X++(Y..Y)) variable list.
 #'
 #' This function is NOT EXPORTED.
 #' Users would not normally call this function.  See \code{\link{readJDX}}.
 #' Documentation is provided for developers wishing to contribute to the package.
 #'
-#' @param VL Character.  The variable list to be processed as a character vector. Includes one pre-pended
-#' line giving the format of data (e.g. XYY, XRR, XII).
-#'
-#' @param params Numeric. Vector of parameters extracted from file header.
-#'
-#' @param mode Character. One of c("XY_data", "NMR", "NMR2D", "PEAK_LIST")
-#'
-#' @param SOFC Logical.  See \code{\link{readJDX}} for details.
-#'
-#' @param debug Integer.  See \code{\link{readJDX}} for details.
+#' @template VL-arg
+#' @template params-arg
+#' @template SOFC-arg
+#' @template debug-arg
+#' @template mode-arg
 #'
 #' @return A data frame with elements \code{x} and \code{y}.
 #'
@@ -39,12 +34,6 @@ processXYY <- function(VL, params, mode, SOFC, debug = 0) {
   }
   if (fmt == "XYY") {
     if (debug >= 1) cat("\nProcessing variable list...\n")
-  }
-  if (fmt == "NMR_2D") {
-    if (debug >= 1) {
-      cat("\nProcessing F2 spectra...", VL[1], "\n")
-    }
-    VL <- VL[-1] # Remove e.g. ##PAGE= F1= 4.7865152724775 now that we have used it for debugging.
   }
 
   ### Step 1. Decompress the lines.  This is most of the work.
@@ -104,7 +93,7 @@ processXYY <- function(VL, params, mode, SOFC, debug = 0) {
 
   ### Step 2. Check the integrity of the results
 
-  if (mode == "XY_data") {
+  if (mode == "XYY") {
 
     # Check that we got the right number of y values
 
@@ -160,7 +149,7 @@ processXYY <- function(VL, params, mode, SOFC, debug = 0) {
     dx <- (lastX - firstX) / (npoints - 1)
     xValues <- seq(firstX, lastX, by = dx)
     yValues <- yValues * factorY
-  } # end of mode = "XY_data"
+  } # end of mode = "XYY"
 
   if (mode == "NMR_1D") {
     pointsX <- as.integer(params[1])

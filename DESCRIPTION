@@ -1,8 +1,8 @@
 Package: readJDX
 Type: Package
 Title: Import Data in the JCAMP-DX Format
-Version: 0.5.61
-Date: 2021-08-07
+Version: 0.6.1
+Date: 2021-09-20
 Authors@R: person(
     "Bryan A.", "Hanson",
     role = c("aut", "cre"),
@@ -14,14 +14,14 @@ BugReports: https://github.com/bryanhanson/readJDX/issues
 License: GPL (>= 3)
 ByteCompile: TRUE
 Depends: R (>= 3.0)
-Suggests: knitr, rmarkdown, kableExtra, pinp
+Suggests: knitr, rmarkdown, bookdown, mvbutils
 Imports: stringr
 VignetteBuilder: knitr
 Encoding: UTF-8
-RoxygenNote: 7.1.1
+RoxygenNote: 7.1.2
 NeedsCompilation: no
-Packaged: 2021-08-07 18:02:06 UTC; bryanhanson
+Packaged: 2021-09-20 19:46:47 UTC; bryanhanson
 Author: Bryan A. Hanson [aut, cre] (<https://orcid.org/0000-0003-3536-8246>)
 Maintainer: Bryan A. Hanson <hanson@depauw.edu>
 Repository: CRAN
-Date/Publication: 2021-08-08 04:30:02 UTC
+Date/Publication: 2021-09-20 20:50:02 UTC

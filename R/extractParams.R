@@ -7,12 +7,9 @@
 #'
 #' @param md Character.  A vector of character strings which contains the metadata.
 #'
-#' @param mode Character. One of c("IR_etc", "NMR", "NMR2D").  Note the same as "fmt" (see notes in code).
-#'        Determines the needed processing.
-#'
-#' @param SOFC Logical. Stop on Failed Check.   See \code{\link{readJDX}} for details.
-#'
-#' @param debug Integer.  See \code{\link{readJDX}} for details.
+#' @template mode-arg
+#' @template SOFC-arg
+#' @template debug-arg
 #'
 #' @return A named numeric vector containing the extracted parameters.
 #'         Contents will vary by \code{mode}.
@@ -21,7 +18,7 @@
 #'
 extractParams <- function(md, mode, SOFC, debug = 0) {
 
-  if (mode == "XY_data") {
+  if (mode == "XYY") {
 
     # The following parameters must be found
 
@@ -79,7 +76,7 @@ extractParams <- function(md, mode, SOFC, debug = 0) {
       cat("\nExtracted parameters:\n")
       print(params)
     }
-  } # end of mode == XY_data
+  } # end of mode == XYY
 
   if (mode == "NMR_1D") {
 
@@ -260,9 +257,9 @@ extractParams <- function(md, mode, SOFC, debug = 0) {
     }
   } # end of mode == "LC_MS"
 
-  if (mode == "PEAK_TABLE") {
+  if (mode == "XYXY") {
 
-    # There are no official checks for this format
+    # There are no official checks for this format (?)
 
     npoints <- grep("^\\s*##NPOINTS\\s*=", md)
     if (SOFC) if (npoints == 0) stop("Couldn't find NPOINTS")
@@ -279,7 +276,7 @@ extractParams <- function(md, mode, SOFC, debug = 0) {
       cat("\nExtracted parameters:\n")
       print(params)
     }
-  } # end of mode == PEAK_TABLE
+  } # end of mode == XYXY
 
   return(params)
 } # end of extractParams

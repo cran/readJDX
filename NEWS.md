@@ -1,6 +1,19 @@
+# readJDX 0.6.0 (2021-09-20)
+## Enhancements
+* `readJDX` can now read the `##XYPOINTS=(XY..XY)` format.
+* Now using `pkgdown` for html documentation.
+* Vignettes improved, including new vignette "Taxonomy".
+
+## Behind the Scenes
+* `processPT` renamed to `processXYXY` as part of simplifying the reading of any format that contains one x,y pair per line in AFFN format.
+* `processDT` renamed to `processLCMS` to better reflect what it does.
+* Function `process2DNMR` and `processXYY` re-worked to simplify and generalize the processing workflow.
+* See the "Taxonomy" vignette for a call graph of the functions.
+
 # readJDX 0.5.61 (2021-08-07)
 ## Enhancements
 * Support for at least some forms of LC-MS/GC-MS data in NTUPLES format added.  Works on a limited number of test files.  Uses new function `processDT` to parse data sets with the `##DATA TABLE= (XI..XI)` format.
+
 ## Behind the Scenes
 * Additional comments to the code to better document the process.
 
