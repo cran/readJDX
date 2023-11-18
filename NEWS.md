@@ -1,4 +1,16 @@
-# readJDX 0.6.0 (2021-09-20)
+# readJDX 0.6.4 (2023-11-18)
+## Behind the Scenes
+* Fixed a problem due to deprecation of the LaTeX package `usenames` which is no longer used by the LaTeX package `xcolor`, used in the vignettes.  Notified by B. Ripley/CRAN.
+* Updated and repaired some URLs in bibliography.
+
+# readJDX 0.6.2 (2022-12-19)
+## Behind the Scenes
+* `master` branch renamed to `main`
+* Checked against latest R.
+* Not on CRAN.
+* Fix problem with author entry in .Rmd yaml (emitted "true")
+
+# readJDX 0.6.1 (2021-09-20)
 ## Enhancements
 * `readJDX` can now read the `##XYPOINTS=(XY..XY)` format.
 * Now using `pkgdown` for html documentation.

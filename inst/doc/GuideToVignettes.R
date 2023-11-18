@@ -3,6 +3,6 @@ library("readJDX")
 rm(list = ls())
 desc <- packageDescription("readJDX")
 
-## ---- eval = FALSE------------------------------------------------------------
+## ----eval = FALSE-------------------------------------------------------------
 #  browseVignettes("readJDX")
 

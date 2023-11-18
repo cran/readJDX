@@ -1,14 +1,11 @@
 ---
 title:  "0. A Guide to readJDX Vignettes"
 author:
-  - name: Bryan A. Hanson^1^
-    email: hanson@depauw.edu
-    affiliation: |
-        1. Professor Emeritus of Chemistry & Biochemistry, DePauw University, Greencastle IN USA.
+  - Bryan A. Hanson^[Professor Emeritus of Chemistry & Biochemistry, DePauw University, Greencastle IN USA., hanson@depauw.edu]
 date:  "`r Sys.Date()`"
 output:
-    #bookdown::html_document2: # use for pkgdown site
-    bookdown::pdf_document2: # use for CRAN to keep size down; breaks GHA
+    bookdown::html_document2: # use for pkgdown site
+    #bookdown::pdf_document2: # use for CRAN to keep size down; breaks GHA
       toc: no
       toc_depth: 3
       fig_caption: yes
